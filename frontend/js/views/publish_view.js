@@ -5,7 +5,7 @@ window.SB_VIEWS["publish-view"] = {
     <div>
       <div class="panel">
         <h2>发布上屏</h2>
-        <p class="lead">甲：正式事务直写；乙：影子草案再升正。两边不得混用。</p>
+        <p class="lead">甲：正式事务直写；乙：影子草案再升正。两边不得混用。命中绿只由时段窗星期集合门限判定。</p>
         <div class="row-form">
           <input v-model.number="form.screen_id" type="number" placeholder="屏幕ID" />
           <input v-model.number="form.playlist_id" type="number" placeholder="清单ID" />
@@ -24,14 +24,21 @@ window.SB_VIEWS["publish-view"] = {
       <div class="panel">
         <h3>正式发布</h3>
         <table>
-          <thead><tr><th>ID</th><th>屏幕</th><th>清单</th><th>时段</th><th>版本</th><th>摘要</th></tr></thead>
+          <thead><tr><th>ID</th><th>屏幕</th><th>清单</th><th>时段</th><th>版本</th><th>星期门限</th><th>摘要</th></tr></thead>
           <tbody>
             <tr v-for="p in official" :key="p.id">
               <td>{{ p.id }}</td><td>{{ p.screen_code }}</td><td>{{ p.playlist_code }}</td>
-              <td>{{ p.window_code }}</td><td>v{{ p.version }}</td><td>{{ p.summary }}</td>
+              <td>{{ p.window_code }}</td><td>v{{ p.version }}</td>
+              <td>
+                <span class="badge" :class="p.window_status === 'open' ? '' : 'bad'">
+                  周{{ p.window_weekdays }}
+                </span>
+              </td>
+              <td>{{ p.summary }}</td>
             </tr>
           </tbody>
         </table>
+        <p class="muted">门限真值取所绑时段窗 weekdays；求值星期不在其中即空播，发布本身不代表此刻命中。</p>
       </div>
     </div>
     <div class="panel">

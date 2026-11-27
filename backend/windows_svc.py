@@ -25,6 +25,11 @@ def list_windows(authorization: str | None = Header(default=None)):
         rows = rows_to_list(conn.execute("SELECT * FROM time_windows ORDER BY id").fetchall())
     for r in rows:
         r["span_min"] = (hm_to_min(r["end_hm"]) - hm_to_min(r["start_hm"])) % (24 * 60)
+        # signboard-14：门限只认该星期集合，显式回传给在线求值页/时段窗页判定
+        r["weekday_gate"] = r["weekdays"]
+        r["gate_status_for"] = (
+            "open_weekday_gate" if r["status"] == "open" else f"{r['status']}_weekday_gate"
+        )
     return {"items": rows}
 
 

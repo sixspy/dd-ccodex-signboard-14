@@ -28,7 +28,11 @@ def list_screens(authorization: str | None = Header(default=None)):
     with connect() as conn:
         rows = conn.execute(
             """
-            SELECT s.*, z.code zone_code, z.title zone_title, z.zone_type, z.risk_level
+            SELECT s.*, z.code zone_code, z.title zone_title, z.zone_type, z.risk_level,
+                   (SELECT gate_status FROM eval_ledger e WHERE e.screen_id=s.id
+                      ORDER BY e.id DESC LIMIT 1) AS last_eval_gate,
+                   (SELECT weekday FROM eval_ledger e WHERE e.screen_id=s.id
+                      ORDER BY e.id DESC LIMIT 1) AS last_eval_weekday
             FROM screens s JOIN zones z ON z.id=s.zone_id
             ORDER BY s.id
             """

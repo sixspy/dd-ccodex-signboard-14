@@ -22,12 +22,62 @@ PRODUCT_META = {
 }
 
 
-def connect() -> sqlite3.Connection:
+_OPEN_CONNECTIONS: list["TrackedConnection"] = []
+
+
+class TrackedConnection:
+    """sqlite3 连接的薄包装：关闭即从注册表摘除，其余行为原样代理。"""
+
+    def __init__(self, raw: sqlite3.Connection):
+        object.__setattr__(self, "_raw", raw)
+
+    def __getattr__(self, name):
+        return getattr(object.__getattribute__(self, "_raw"), name)
+
+    def __setattr__(self, name, value):
+        setattr(object.__getattribute__(self, "_raw"), name, value)
+
+    def close(self):
+        try:
+            _OPEN_CONNECTIONS.remove(self)
+        except ValueError:
+            pass
+        object.__getattribute__(self, "_raw").close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        raw = object.__getattribute__(self, "_raw")
+        raw.__exit__(*exc)
+        self.close()
+        return False
+
+
+def connect() -> TrackedConnection:
     DATA.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys=ON")
+    # isolation_level=None：关闭 sqlite3 模块的隐式事务，BEGIN IMMEDIATE 才真正立即取写锁，
+    # 否则隐式 DEFERRED 事务会让并发抢锁退化成读快照，败方看不到胜方已提交的锁行。
+    raw = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10, isolation_level=None)
+    raw.row_factory = sqlite3.Row
+    # WAL：写者串行提交后，后到的写事务能读到最新已提交页；rollback journal 下
+    # BEGIN IMMEDIATE 阻塞结束后仍可能持有陈旧快照，导致同屏抢锁双成。
+    raw.execute("PRAGMA journal_mode=WAL")
+    raw.execute("PRAGMA foreign_keys=ON")
+    raw.execute("PRAGMA busy_timeout=5000")
+    conn = TrackedConnection(raw)
+    _OPEN_CONNECTIONS.append(conn)
     return conn
+
+
+def reset_connections() -> None:
+    """关闭全部已开连接（测试切库时调用，避免旧文件句柄缓存破坏事务可见性）。"""
+    for conn in list(_OPEN_CONNECTIONS):
+        try:
+            conn.close()
+        except sqlite3.Error:
+            pass
+    _OPEN_CONNECTIONS.clear()
 
 
 SCHEMA = """
@@ -182,6 +232,21 @@ CREATE TABLE IF NOT EXISTS audit_log(
   payload TEXT NOT NULL,
   created_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS eval_ledger(
+  id INTEGER PRIMARY KEY,
+  screen_id INTEGER NOT NULL REFERENCES screens(id),
+  publication_id INTEGER REFERENCES publications(id),
+  window_id INTEGER REFERENCES time_windows(id),
+  weekday TEXT NOT NULL,
+  now_hm TEXT NOT NULL,
+  result_kind TEXT NOT NULL,
+  gate_status TEXT NOT NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  item_count INTEGER NOT NULL DEFAULT 0,
+  actor TEXT NOT NULL,
+  created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_eval_ledger_screen ON eval_ledger(screen_id, id DESC);
 """
 
 

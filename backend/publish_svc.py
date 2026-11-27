@@ -22,7 +22,8 @@ def list_official(authorization: str | None = Header(default=None)):
             conn.execute(
                 """
                 SELECT p.*, s.code screen_code, s.title screen_title,
-                       pl.code playlist_code, w.code window_code
+                       pl.code playlist_code, w.code window_code,
+                       w.weekdays AS window_weekdays, w.status AS window_status
                 FROM publications p
                 JOIN screens s ON s.id=p.screen_id
                 JOIN playlists pl ON pl.id=p.playlist_id
@@ -31,6 +32,13 @@ def list_official(authorization: str | None = Header(default=None)):
                 ORDER BY p.id DESC
                 """
             ).fetchall()
+        )
+    for r in rows:
+        # signboard-14：门限字段显式给出，命中与否只由真实星期集合判定，禁止缺省即绿
+        r["weekday_gate"] = r["window_weekdays"]
+        r["gate_status_for"] = (
+            "open_weekday_gate" if r["window_status"] == "open"
+            else f"{r['window_status']}_weekday_gate"
         )
     return {"items": rows}
 

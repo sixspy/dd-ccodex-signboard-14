@@ -20,3 +20,16 @@ def list_history(limit: int = 100, authorization: str | None = Header(default=No
             ).fetchall()
         )
     return {"items": rows}
+
+
+@router.get("/rejections")
+def list_rejections(authorization: str | None = Header(default=None)):
+    """signboard-14：星期不匹配拒播痕专册，便于核对空播有据。"""
+    current_user(authorization)
+    with connect() as conn:
+        rows = rows_to_list(
+            conn.execute(
+                "SELECT * FROM change_history WHERE action='reject_weekday' ORDER BY id DESC"
+            ).fetchall()
+        )
+    return {"items": rows}
